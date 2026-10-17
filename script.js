@@ -11,7 +11,7 @@
 */
 (() => {
   // Mets true si tu as aussi mis tes propres photos dans le dossier images/ (essayées en premier).
-  const UTILISER_IMAGES_LOCALES = false;
+  const UTILISER_IMAGES_LOCALES = true;
 
   const CLE = "fruits-photos-v1";
   const SEPT_JOURS = 7 * 24 * 3600 * 1000;
@@ -68,17 +68,40 @@
       tache().finally(() => { actifs--; setTimeout(pomper, 150); });
     }
   }
+  let succes = 0, echecs = 0;
+  function erreurReseau(e) {
+    echecs++;
+    console.warn("[photos.js] Wikimedia Commons injoignable :", e && e.message ? e.message : e);
+    if (succes === 0 && echecs >= 3 && !document.getElementById("photos-erreur")) {
+      const d = document.createElement("div");
+      d.id = "photos-erreur";
+      d.style.cssText = "max-width:1100px;margin:14px auto 0;padding:12px 16px;background:#fdecea;color:#8a1f17;border-radius:12px;font:0.95rem system-ui,sans-serif";
+      d.textContent = "⚠️ Impossible de charger les photos depuis Wikimedia Commons (" +
+        (e && e.message ? e.message : "erreur réseau") + "). Ouvre le site depuis GitHub Pages ou depuis ton ordinateur " +
+        "(pas depuis un aperçu intégré), puis appuie sur F12 → Console pour voir le détail.";
+      const cible = document.getElementById("compteur");
+      cible ? cible.after(d) : document.body.prepend(d);
+    }
+  }
   function infoPour(id, fruit, nom) {
     if (!enCours.has(id)) {
       enCours.set(id, new Promise(resolve => {
         attente.push(async () => {
+          let derniere;
           try {
-            const info = await trouverPhoto(fruit, nom);
-            cache[id] = info || { introuvable: Date.now() };
-            sauver();
-            resolve(info);
-          } catch (e) { resolve(undefined); } // erreur réseau : on ne retient rien
-          finally { enCours.delete(id); }
+            for (let essai = 0; essai < 3; essai++) {
+              try {
+                const info = await trouverPhoto(fruit, nom);
+                cache[id] = info || { introuvable: Date.now() };
+                sauver();
+                succes++;
+                if (!info) console.info("[photos.js] aucune photo pour :", fruit, nom);
+                return resolve(info);
+              } catch (e) { derniere = e; await pause(800 * (essai + 1)); }
+            }
+            erreurReseau(derniere);
+            resolve(undefined); // erreur réseau : on ne retient rien
+          } finally { enCours.delete(id); }
         });
         pomper();
       }));
@@ -114,6 +137,7 @@
     const info = await infoPour(id, fruit, nom);
     if (info) montrer(img, info);
     else if (info === null) img.remove();
+    else delete img.dataset.traite; // erreur réseau : nouvel essai au prochain affichage
   }
 
   function traiter(img) {
