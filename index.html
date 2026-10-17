@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fruits : à peser ou pas ?</title>
+<style>
+  :root{--bg:#fff8ef;--card:#fff;--txt:#2b2b2b;--muted:#7a7266;--vert:#2e9d4f;--orange:#f08a24;--rouge:#d9423a;--ombre:0 6px 18px rgba(0,0,0,.08)}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--txt)}
+  header{background:linear-gradient(135deg,var(--vert),#7bc96f);color:#fff;text-align:center;padding:32px 16px}
+  header h1{margin:0 0 6px;font-size:2rem}
+  header p{margin:0;opacity:.95}
+  .controls{max-width:1100px;margin:20px auto 0;padding:0 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap}
+  .tab{border:2px solid var(--vert);background:#fff;color:var(--vert);padding:8px 16px;border-radius:999px;font-weight:600;cursor:pointer}
+  .tab.active{background:var(--vert);color:#fff}
+  .droite{display:flex;gap:10px;flex-wrap:wrap}
+  #recherche,#famille{padding:10px 14px;border:2px solid #e3d9c8;border-radius:999px;font-size:1rem;background:#fff}
+  #recherche{min-width:200px}
+  #compteur{max-width:1100px;margin:10px auto 0;padding:0 16px;color:var(--muted)}
+  .grille{max-width:1100px;margin:14px auto 30px;padding:0 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+  .carte{background:var(--card);border-radius:16px;box-shadow:var(--ombre);overflow:hidden;cursor:pointer;transition:transform .15s;border:3px solid transparent}
+  .carte:hover{transform:translateY(-4px)}
+  .carte.sel{border-color:var(--orange)}
+  .photo{height:130px;background:#f3ecdf;display:flex;align-items:center;justify-content:center;font-size:4.2rem;position:relative}
+  .photo img{width:100%;height:100%;object-fit:cover;display:block;position:relative;z-index:1}
+  .photo .emo{position:absolute;z-index:0}
+  .badge{position:absolute;z-index:2;top:8px;left:8px;font-size:.72rem;font-weight:700;color:#fff;padding:4px 10px;border-radius:999px}
+  .badge.peser{background:var(--orange)}.badge.piece{background:var(--vert)}
+  .infos{padding:10px 14px 12px}
+  .infos small{color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-size:.7rem}
+  .infos h3{margin:2px 0 4px;font-size:1.05rem}
+  .prix{color:var(--rouge);font-weight:700}
+  #detail{max-width:1100px;margin:0 auto;padding:0 16px}
+  .panel{background:#fff;border-radius:20px;box-shadow:var(--ombre);display:grid;grid-template-columns:260px 1fr;gap:20px;padding:20px;margin-top:20px;border-left:8px solid var(--orange)}
+  .panel .photo{height:220px;border-radius:14px;overflow:hidden}
+  .panel h2{margin:0 0 2px}
+  .famille{color:var(--muted);margin-bottom:6px}
+  .verdict{display:inline-block;font-weight:700;padding:6px 14px;border-radius:999px;color:#fff;margin:6px 0 12px}
+  .verdict.peser{background:var(--orange)}.verdict.piece{background:var(--vert)}
+  .gros-prix{font-size:2rem;font-weight:800;color:var(--rouge)}
+  .calc{margin-top:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .calc input{width:120px;padding:10px;border:2px solid #e3d9c8;border-radius:10px;font-size:1.1rem}
+  .total{font-size:1.4rem;font-weight:700}
+  .astuce{color:var(--muted);margin-top:10px}
+  .vide{text-align:center;color:var(--muted);padding:30px;grid-column:1/-1}
+  @media(max-width:700px){.panel{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍎 Fruits : à peser ou pas ?</h1>
+  <p>Toutes les variétés. Clique sur un fruit pour voir son prix et savoir s’il faut le peser.</p>
+</header>
+
+<div class="controls">
+  <div class="tabs">
+    <button class="tab active" data-filtre="tous">Tous</button>
+    <button class="tab" data-filtre="peser">⚖️ À peser</button>
+    <button class="tab" data-filtre="piece">🔢 Pas à peser</button>
+  </div>
+  <div class="droite">
+    <select id="famille"><option value="">Tous les fruits</option></select>
+    <input id="recherche" type="search" placeholder="Rechercher une variété…">
+  </div>
+</div>
+<div id="compteur"></div>
+<div id="detail"></div>
+<main class="grille" id="grille"></main>
+
+<script>
+/* ===== DONNÉES =====
+   Chaque famille : emoji, mode ("peser" = prix au kilo / "piece" = prix fixe), unite (pour "piece"),
+   et la liste des variétés [nom, prix]. Prix indicatifs : à adapter.
+   Photos : dossier "images/", nom = famille-variete en minuscules sans accents
+   (ex : images/pomme-golden.jpg, images/pomme-pink-lady.jpg). Sans photo => emoji. */
+const FAMILLES = [
+ {fruit:"Pomme",emoji:"🍎",mode:"peser",v:[["Golden",2.49],["Gala",2.69],["Royal Gala",2.79],["Granny Smith",2.79],["Pink Lady",3.49],["Fuji",2.99],["Braeburn",2.79],["Jonagold",2.59],["Elstar",2.69],["Idared",2.49],["Boskoop",2.59],["Reine des reinettes",2.99],["Reinette grise du Canada",2.99],["Reinette clochard",2.99],["Belchard",2.79],["Chantecler",2.49],["Story",3.29],["Melrose",2.69],["Red Delicious",2.59],["Honeycrisp",3.99],["Cripps Red",3.19],["Ariane",2.89],["Juliet",3.29],["Opal",3.29],["Pomme d'Api",3.49]]},
+ {fruit:"Poire",emoji:"🍐",mode:"peser",v:[["Williams",2.79],["Conférence",2.59],["Comice",3.19],["Abate Fetel",3.29],["Passe-Crassane",3.19],["Guyot",2.79],["Rocha",2.99],["Packham",2.89],["Nashi",4.50],["Louise-Bonne",3.19],["Beurré Hardy",2.99]]},
+ {fruit:"Banane",emoji:"🍌",mode:"peser",v:[["Cavendish",1.79],["Plantain",2.49],["Banane figue",3.99],["Banane rouge",4.50],["Baby banane",3.29]]},
+ {fruit:"Orange",emoji:"🍊",mode:"peser",v:[["Navel",2.19],["Navelate",2.19],["Valencia",1.99],["Salustiana",1.99],["Sanguine Moro",2.89],["Sanguinelli",2.89],["Cara Cara",2.99],["Orange à jus",1.49],["Orange amère de Séville",3.50]]},
+ {fruit:"Mandarine",emoji:"🍊",mode:"peser",v:[["Clémentine",2.89],["Clémentine de Corse",3.49],["Mandarine",2.99],["Satsuma",2.79],["Tangelo",3.19],["Nadorcott",3.49],["Ortanique",3.19]]},
+ {fruit:"Citron",emoji:"🍋",mode:"piece",unite:"pièce",v:[["Citron Eureka",0.60],["Citron Verna",0.65],["Citron vert (lime)",0.45],["Cédrat",3.00],["Yuzu",2.50],["Main de Bouddha",4.90]]},
+ {fruit:"Citron",emoji:"🍋",mode:"peser",v:[["Citron de Menton",4.99],["Bergamote",4.50],["Kumquat",7.90]]},
+ {fruit:"Pamplemousse",emoji:"🍊",mode:"piece",unite:"pièce",v:[["Pamplemousse rose",1.10],["Pamplemousse blanc",1.00],["Pomelo",2.50],["Oroblanco",1.80]]},
+ {fruit:"Raisin",emoji:"🍇",mode:"peser",v:[["Italia",3.49],["Muscat",3.99],["Chasselas",3.49],["Red Globe",3.99],["Cardinal",3.99],["Black Magic",4.29],["Thomson (sans pépins)",4.29],["Alphonse Lavallée",3.99],["Raisin rouge sans pépins",4.49]]},
+ {fruit:"Fraise",emoji:"🍓",mode:"peser",v:[["Gariguette",9.90],["Charlotte",7.90],["Mara des bois",10.90],["Ciflorette",6.90],["Darselect",7.50],["Cirafine",7.50],["Magnum",7.90],["Fraise des bois",29.00]]},
+ {fruit:"Baies",emoji:"🫐",mode:"piece",unite:"barquette",v:[["Framboise",3.20],["Mûre",2.90],["Myrtille",3.50],["Groseille",2.90],["Cassis",3.20],["Physalis",3.20],["Airelle",3.90]]},
+ {fruit:"Cerise",emoji:"🍒",mode:"peser",v:[["Burlat",7.90],["Bigarreau",8.50],["Napoléon",8.50],["Summit",8.90],["Reverchon",8.90],["Griotte",6.90],["Guigne",7.50]]},
+ {fruit:"Pêche",emoji:"🍑",mode:"peser",v:[["Pêche jaune",3.99],["Pêche blanche",4.29],["Pêche plate",4.49],["Pêche de vigne",4.99],["Nectarine jaune",3.99],["Nectarine blanche",4.29]]},
+ {fruit:"Abricot",emoji:"🍑",mode:"peser",v:[["Bergeron",4.99],["Orangé de Provence",4.49],["Rouge du Roussillon",4.99],["Polonais",4.49],["Bergarouge",4.79]]},
+ {fruit:"Prune",emoji:"🍑",mode:"peser",v:[["Reine-Claude",4.29],["Mirabelle",4.99],["Quetsche",3.99],["Prune d'ente",3.99],["Santa Rosa",3.49],["Prune rouge",3.49],["Prune jaune",3.79]]},
+ {fruit:"Kiwi",emoji:"🥝",mode:"peser",v:[["Hayward (vert)",3.49],["Kiwi jaune (Gold)",5.50],["Kiwaï",9.90],["Kiwi rouge",7.90]]},
+ {fruit:"Melon",emoji:"🍈",mode:"piece",unite:"pièce",v:[["Charentais",2.20],["Cavaillon",2.50],["Galia",2.30],["Honeydew",3.00],["Piel de sapo",3.00],["Jaune canari",3.20]]},
+ {fruit:"Pastèque",emoji:"🍉",mode:"piece",unite:"pièce",v:[["Pastèque classique",4.90],["Mini pastèque",3.50],["Pastèque jaune",6.90],["Pastèque sans pépins",5.50]]},
+ {fruit:"Ananas",emoji:"🍍",mode:"piece",unite:"pièce",v:[["Ananas Victoria",2.90],["Ananas MD2",2.50],["Baby ananas",1.90]]},
+ {fruit:"Avocat",emoji:"🥑",mode:"piece",unite:"pièce",v:[["Hass",1.50],["Fuerte",1.30],["Bacon",1.20],["Pinkerton",1.40],["Reed",2.00]]},
+ {fruit:"Mangue",emoji:"🥭",mode:"piece",unite:"pièce",v:[["Kent",2.80],["Tommy Atkins",2.30],["Keitt",2.80],["Palmer",2.80],["Alphonso",4.00],["Amélie",3.50]]},
+ {fruit:"Figue",emoji:"🫒",mode:"peser",v:[["Bourjassotte noire",7.90],["Figue de Solliès",9.90],["Figue blanche",8.90],["Figue de Barbarie",6.50]]},
+ {fruit:"Datte",emoji:"🌴",mode:"peser",v:[["Medjool",14.90],["Deglet Nour",8.90]]},
+ {fruit:"Kaki",emoji:"🍅",mode:"peser",v:[["Kaki Persimon",4.50],["Kaki Sharon",4.90],["Kaki Rojo Brillante",4.90]]},
+ {fruit:"Grenade",emoji:"🍎",mode:"piece",unite:"pièce",v:[["Wonderful",1.80],["Mollar",2.20]]},
+ {fruit:"Fruit exotique",emoji:"🐉",mode:"piece",unite:"pièce",v:[["Pitaya blanche",3.50],["Pitaya rouge",4.50],["Fruit de la passion violet",1.20],["Fruit de la passion jaune",1.40],["Papaye",3.50],["Goyave",1.50],["Carambole",2.00],["Noix de coco",2.40],["Corossol",6.90]]},
+ {fruit:"Fruit exotique",emoji:"🐉",mode:"peser",v:[["Litchi",8.90],["Ramboutan",9.90],["Longane",9.90],["Mangoustan",15.00],["Chérimole",7.90]]},
+ {fruit:"Coing",emoji:"🍐",mode:"peser",v:[["Coing",3.50],["Nèfle",5.90]]}
+];
+
+const slug = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+const FRUITS = [];
+FAMILLES.forEach(f => f.v.forEach(([nom,prix]) => FRUITS.push({
+  id: slug(f.fruit+"-"+nom), fruit:f.fruit, nom, emoji:f.emoji, mode:f.mode,
+  unite:f.unite||"pièce", prix, photo:"images/"+slug(f.fruit+"-"+nom)+".jpg"
+})));
+
+const euro = n => n.toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
+const grille = document.getElementById("grille"), detail = document.getElementById("detail");
+const selFamille = document.getElementById("famille");
+[...new Set(FRUITS.map(f=>f.fruit))].sort((a,b)=>a.localeCompare(b,"fr"))
+  .forEach(n => selFamille.insertAdjacentHTML("beforeend",`<option>${n}</option>`));
+let filtre="tous", recherche="", famille="", choisi=null;
+
+function photoHTML(f,badge){
+  const b = badge ? `<span class="badge ${f.mode}">${f.mode==="peser"?"⚖️ À peser":"🔢 Prix fixe"}</span>` : "";
+  return `<div class="photo"><span class="emo">${f.emoji}</span>
+    <img src="${f.photo}" alt="${f.nom}" onerror="this.remove()">${b}</div>`;
+}
+const prixTxt = f => f.mode==="peser" ? `${euro(f.prix)} / kg` : `${euro(f.prix)} / ${f.unite}`;
+
+function afficherGrille(){
+  const liste = FRUITS.filter(f =>
+    (filtre==="tous"||f.mode===filtre) && (!famille||f.fruit===famille) &&
+    (f.nom+" "+f.fruit).toLowerCase().includes(recherche));
+  document.getElementById("compteur").textContent = liste.length+" variété"+(liste.length>1?"s":"")+" affichée"+(liste.length>1?"s":"");
+  grille.innerHTML = liste.length ? liste.map(f=>`
+    <article class="carte ${choisi===f.id?"sel":""}" data-id="${f.id}">
+      ${photoHTML(f,true)}
+      <div class="infos"><small>${f.fruit}</small><h3>${f.nom}</h3><div class="prix">${prixTxt(f)}</div></div>
+    </article>`).join("") : '<div class="vide">Aucun fruit trouvé 🤷</div>';
+}
+
+function afficherDetail(){
+  const f = FRUITS.find(x=>x.id===choisi);
+  if(!f){detail.innerHTML="";return;}
+  const peser = f.mode==="peser";
+  detail.innerHTML = `
+  <div class="panel" style="border-left-color:${peser?"var(--orange)":"var(--vert)"}">
+    ${photoHTML(f,false)}
+    <div>
+      <h2>${f.nom}</h2><div class="famille">${f.fruit}</div>
+      <span class="verdict ${f.mode}">${peser?"⚖️ À peser sur la balance":"🔢 Pas besoin de peser"}</span>
+      <div class="gros-prix">${euro(f.prix)} <small style="font-size:1rem">${peser?"par kilo":"la "+f.unite}</small></div>
+      <div class="calc">
+        <label for="qte">${peser?"Poids (grammes) :":"Quantité :"}</label>
+        <input id="qte" type="number" min="0" step="${peser?50:1}" value="${peser?500:1}">
+        <span class="total" id="total"></span>
+      </div>
+      <p class="astuce">${peser?"Pèse ce fruit, colle l’étiquette et passe en caisse avec le ticket.":"Ce fruit se prend directement : le prix est fixe pour chaque "+f.unite+"."}</p>
+    </div>
+  </div>`;
+  const qte=document.getElementById("qte"), total=document.getElementById("total");
+  const calcul=()=>{const v=parseFloat(qte.value)||0;total.textContent="Total : "+euro(peser?f.prix*v/1000:f.prix*v)};
+  qte.addEventListener("input",calcul);calcul();
+}
+
+grille.addEventListener("click",e=>{
+  const c=e.target.closest(".carte");if(!c)return;
+  choisi=c.dataset.id;afficherGrille();afficherDetail();
+  detail.scrollIntoView({behavior:"smooth",block:"start"});
+});
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active");filtre=t.dataset.filtre;afficherGrille();
+}));
+selFamille.addEventListener("change",e=>{famille=e.target.value;afficherGrille()});
+document.getElementById("recherche").addEventListener("input",e=>{recherche=e.target.value.toLowerCase().trim();afficherGrille()});
+afficherGrille();
+</script>
+</body>
+</html>
